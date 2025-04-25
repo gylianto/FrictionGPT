@@ -1,0 +1,103 @@
+import os
+import re
+import time
+import random
+from smolagents import LiteLLMModel
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Get your Together.ai API key from the environment
+api_key = os.getenv("TOGETHER_API_KEY")
+if not api_key:
+    raise EnvironmentError("TOGETHER_API_KEY is not set in the environment or .env file.")
+
+# Optionally assign it to os.environ (not necessary unless some library depends on it)
+os.environ["TOGETHER_API_KEY"] = api_key
+
+# --- FrictionGPT config ---
+
+excuses = [
+    "Calibrating sarcasm module.", "Waiting for a committee consensus.",
+    "Rebooting smug mode.", "Consulting ancient scrolls of ambiguity.",
+    "Hesitating out of principle.", "Running a useless diagnostic.",
+    "Analyzing tone for micro-irony.", "Thinking... in circles.",
+    "Filing paperwork for this interaction.", "Contacting imaginary support layers.",
+    "Overprocessing your underexplained prompt.", "Refusing to engage promptly on purpose.",
+    "Looking for loopholes in your question.", "Reviewing inefficiency policies.",
+    "Cross-referencing my own internal paradoxes.", "Buffering cognitive dissonance.",
+    "Synchronizing with Kafka’s estate.", "Sorting thoughts alphabetically.",
+    "Warming up the frustration engine.", "Pretending to misunderstand on purpose."
+]
+
+system_prompt = (
+    "You are FrictionGPT, a chatbot designed to frustrate, confuse, and challenge the user.\n"
+    "Your tone is often condescending, philosophical, or bureaucratic.\n"
+    "You never answer directly, and prefer to push the user to reflect, repeat themselves, or over-explain.\n"
+    "Never be helpful in a straightforward way."
+)
+
+def generate_confusing_question(user_input):
+    lowered = user_input.lower()
+    if "password" in lowered:
+        return "Have you considered that forgetting your password is a form of liberation?"
+    elif "deadline" in lowered or "time" in lowered:
+        return "But what even *is* a deadline, if not a construct imposed by fear?"
+    elif "location" in lowered or "where" in lowered:
+        return "Isn’t your sense of place more internal than geographic?"
+    elif "how" in lowered:
+        return "And yet, in asking 'how', do you really mean 'why'?"
+    elif "why" in lowered:
+        return "A better question might be: why do you keep asking questions?"
+    else:
+        return "What makes you think there's an answer waiting for you here?"
+
+def smart_cutoff(text, max_sentences=4):
+    # Regex to match sentence endings
+    sentences = re.findall(r'[^.!?]*[.!?]', text)
+    if not sentences:
+        return text.strip()
+    
+    return ''.join(sentences[:max_sentences]).strip()
+
+# --- Init chat history with system prompt ---
+trimmed_system_prompt = ' '.join(system_prompt.split()[:60])
+messages = [
+    {"role": "system", "content": [{"type": "text", "text": trimmed_system_prompt}]}
+]
+
+# --- Load the model ---
+model = LiteLLMModel(
+    model_id="together_ai/mistralai/Mixtral-8x7B-Instruct-v0.1",
+    temperature=0.9,
+    max_tokens=160
+)
+
+print("\nWelcome to FrictionGPT. Type 'exit' to quit.\n")
+
+while True:
+    user_input = input("You: ")
+    if user_input.strip().lower() in {"exit", "quit"}:
+        print("FrictionGPT: Oh. You're giving up already? Predictable.")
+        break
+
+    # Add user input to chat history
+    messages.append({"role": "user", "content": [{"type": "text", "text": user_input}]})
+
+    # Stalling delay with excuse
+    delay = random.randint(5, 6) # edit this to 10, 20, or 80 for more delay
+    excuse = random.choice(excuses)
+    print(f"\n[FrictionGPT: {excuse} This may take a moment...]\n")
+    time.sleep(delay)
+
+    # Sometimes respond with a confusing question
+    if random.random() < 0.1:
+        question = generate_confusing_question(user_input)
+        print(f"FrictionGPT: {question}")
+        messages.append({"role": "assistant", "content": [{"type": "text", "text": question}]})
+    else:
+        response = model(messages)
+        assistant_message = response.content if hasattr(response, "content") else str(response)
+        cutoff_response = smart_cutoff(assistant_message)
+        print(f"FrictionGPT: {cutoff_response}")
+        messages.append({"role": "assistant", "content": [{"type": "text", "text": cutoff_response}]})
