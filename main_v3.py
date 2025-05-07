@@ -2,18 +2,18 @@ import os
 import re
 import time
 import random
-from smolagents import LiteLLMModel
+from litellm import completion
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Get your Together.ai API key from the environment
-api_key = os.getenv("TOGETHER_API_KEY")
+# Get your Mistral API key from the environment
+api_key = os.getenv("MISTRAL_API_KEY")
 if not api_key:
-    raise EnvironmentError("TOGETHER_API_KEY is not set in the environment or .env file.")
+    raise EnvironmentError("MISTRAL_API_KEY is not set in the environment or .env file.")
 
-# Optionally assign it to os.environ (not necessary unless some library depends on it)
-os.environ["TOGETHER_API_KEY"] = api_key
+# Set the API key for litellm
+os.environ["MISTRAL_API_KEY"] = api_key
 
 # --- FrictionGPT config ---
 
@@ -26,7 +26,7 @@ excuses = [
     "Overprocessing your underexplained prompt.", "Refusing to engage promptly on purpose.",
     "Looking for loopholes in your question.", "Reviewing inefficiency policies.",
     "Cross-referencing my own internal paradoxes.", "Buffering cognitive dissonance.",
-    "Synchronizing with Kafka’s estate.", "Sorting thoughts alphabetically.",
+    "Synchronizing with Kafka's estate.", "Sorting thoughts alphabetically.",
     "Warming up the frustration engine.", "Pretending to misunderstand on purpose."
 ]
 
@@ -44,7 +44,7 @@ def generate_confusing_question(user_input):
     elif "deadline" in lowered or "time" in lowered:
         return "But what even *is* a deadline, if not a construct imposed by fear?"
     elif "location" in lowered or "where" in lowered:
-        return "Isn’t your sense of place more internal than geographic?"
+        return "Isn't your sense of place more internal than geographic?"
     elif "how" in lowered:
         return "And yet, in asking 'how', do you really mean 'why'?"
     elif "why" in lowered:
@@ -62,16 +62,12 @@ def smart_cutoff(text, max_sentences=4):
 
 # --- Init chat history with system prompt ---
 trimmed_system_prompt = ' '.join(system_prompt.split()[:60])
+# Simpler message format for litellm
 messages = [
-    {"role": "system", "content": [{"type": "text", "text": trimmed_system_prompt}]}
+    {"role": "system", "content": trimmed_system_prompt}
 ]
 
-# --- Load the model ---
-model = LiteLLMModel(
-    model_id="together_ai/mistralai/Mixtral-8x7B-Instruct-v0.1",
-    temperature=0.9,
-    max_tokens=160
-)
+# Remove model initialization - we'll call completion directly instead
 
 print("\nWelcome to FrictionGPT. Type 'exit' to quit.\n")
 
@@ -81,11 +77,11 @@ while True:
         print("FrictionGPT: Oh. You're giving up already? Predictable.")
         break
 
-    # Add user input to chat history
-    messages.append({"role": "user", "content": [{"type": "text", "text": user_input}]})
+    # Add user input to chat history - simpler format for litellm
+    messages.append({"role": "user", "content": user_input})
 
     # Stalling delay with excuse
-    delay = random.randint(5, 6) # edit this to 10, 20, or 80 for more delay
+    delay = random.randint(5, 6)  # edit this to 10, 20, or 80 for more delay
     excuse = random.choice(excuses)
     print(f"\n[FrictionGPT: {excuse} This may take a moment...]\n")
     time.sleep(delay)
@@ -94,10 +90,22 @@ while True:
     if random.random() < 0.1:
         question = generate_confusing_question(user_input)
         print(f"FrictionGPT: {question}")
-        messages.append({"role": "assistant", "content": [{"type": "text", "text": question}]})
+        messages.append({"role": "assistant", "content": question})
     else:
-        response = model(messages)
-        assistant_message = response.content if hasattr(response, "content") else str(response)
-        cutoff_response = smart_cutoff(assistant_message)
-        print(f"FrictionGPT: {cutoff_response}")
-        messages.append({"role": "assistant", "content": [{"type": "text", "text": cutoff_response}]})
+        try:
+            # Direct call to litellm completion
+            response = completion(
+                model="mistral/mistral-small-latest",
+                messages=messages,
+                temperature=0.9,
+                max_tokens=160
+            )
+            assistant_message = response.choices[0].message.content
+            cutoff_response = smart_cutoff(assistant_message)
+            print(f"FrictionGPT: {cutoff_response}")
+            messages.append({"role": "assistant", "content": cutoff_response})
+        except Exception as e:
+            print(f"Error: {e}")
+            fallback_response = "I seem to be experiencing an existential crisis. Perhaps that's a form of authenticity?"
+            print(f"FrictionGPT: {fallback_response}")
+            messages.append({"role": "assistant", "content": fallback_response})
